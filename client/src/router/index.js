@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from "vue-router";
-
+import NotFoundView from "../views/NotFoundView.vue";
 import HomeView from "../views/HomeView.vue";
 import ProductsCatalogView from "../views/ProductsCatalogView.vue";
 import ProductsAdminView from "../views/ProductsAdminView.vue";
@@ -12,6 +12,7 @@ import { useAuthStore } from "../stores/authStore";
 
 const routes = [
   { path: "/", component: HomeView },
+{ path: "/:pathMatch(.*)*", component: NotFoundView },
 
   // public
   { path: "/login", component: LoginView },

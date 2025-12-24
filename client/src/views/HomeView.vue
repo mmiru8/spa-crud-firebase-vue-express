@@ -157,7 +157,7 @@ import { useRouter } from "vue-router";
 const router = useRouter();
 
 // (simplu) direct către backend
-const apiBase = "";
+const apiBase = import.meta.env.VITE_API_BASE;
 
 const products = ref([]);
 const loading = ref(false);

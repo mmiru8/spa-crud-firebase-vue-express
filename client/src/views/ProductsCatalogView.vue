@@ -49,20 +49,21 @@
         </div>
 
         <div class="actions">
-          <button class="btn" @click="addToCart(p)">
+          <BaseButton variant="primary" @click="addToCart(p)">
   Adaugă în coș
-</button>
+</BaseButton>
+
         </div>
       </article>
     </section>
-    <div v-if="toast" class="toast">
-  {{ toast }}
-</div>
+    <Toast :model-value="toast" />
 
   </div>
 </template>
 
 <script setup>
+  import BaseButton from "../components/BaseButton.vue";
+import Toast from "../components/Toast.vue";
 import { computed, onMounted, ref } from "vue";
 import { getProducts } from "../services/productsService";
 import { useCartStore } from "../stores/cartStore";
