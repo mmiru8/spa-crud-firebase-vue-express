@@ -1,31 +1,13 @@
-import { db } from "../firebase/firebase";
-import {
-  collection,
-  addDoc,
-  getDocs,
-  query,
-  orderBy,
-  serverTimestamp,
-} from "firebase/firestore";
+import { apiFetch } from "./api";
 
-const ordersRef = collection(db, "orders");
-
-// CREATE
 export const createOrder = async (payload) => {
-  // payload: { items, totalItems, totalPrice }
-  return await addDoc(ordersRef, {
-    ...payload,
-    status: "noua",
-    createdAt: serverTimestamp(),
+  const data = await apiFetch("/api/orders", {
+    method: "POST",
+    body: JSON.stringify(payload),
   });
+  return data?.id;
 };
 
-// READ (list)
-export const getOrders = async () => {
-  const q = query(ordersRef, orderBy("createdAt", "desc"));
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map((d) => ({
-    id: d.id,
-    ...d.data(),
-  }));
+export const getMyOrders = async () => {
+  return await apiFetch("/api/orders/my");
 };

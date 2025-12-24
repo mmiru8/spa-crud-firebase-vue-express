@@ -4,6 +4,7 @@ const morgan = require("morgan");
 require("dotenv").config();
 
 const productsRoutes = require("./routes/products");
+const ordersRoutes = require("./routes/orders");
 
 const app = express();
 
@@ -22,6 +23,7 @@ app.get("/health", (req, res) => {
 });
 
 app.use("/api/products", productsRoutes);
+app.use("/api/orders", ordersRoutes);
 
 
 app.use((req, res) => {

@@ -5,16 +5,8 @@ export default defineConfig({
   plugins: [vue()],
   server: {
     proxy: {
-      "/api": {
-        target: "http://localhost:4000",
-        changeOrigin: true,
-        secure: false,
-      },
-      "/health": {
-        target: "http://localhost:4000",
-        changeOrigin: true,
-        secure: false,
-      },
+      "/api": { target: "http://localhost:4000", changeOrigin: true },
+      "/health": { target: "http://localhost:4000", changeOrigin: true },
     },
   },
 });

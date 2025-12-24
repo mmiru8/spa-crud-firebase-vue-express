@@ -12,7 +12,7 @@
     </header>
 
     <section class="card">
-      <h2>Adaugă produs</h2>
+<h2>{{ editingId ? "Editează produs" : "Adaugă produs" }}</h2>
 
       <form @submit.prevent="submit">
         <label class="label">Nume</label>
@@ -27,8 +27,9 @@
 
         <div class="row">
           <button class="btn" type="submit" :disabled="saving">
-            {{ saving ? "Se salvează..." : "Adaugă" }}
-          </button>
+  {{ saving ? "Se salvează..." : (editingId ? "Salvează" : "Adaugă") }}
+</button>
+
           <button class="btnOutline" type="button" @click="reset" :disabled="saving">
             Resetează
           </button>
@@ -50,9 +51,26 @@
             <div class="muted">{{ p.description || "Fără descriere" }}</div>
           </div>
 
-          <button class="danger" @click="remove(p.id)" :disabled="deletingId === p.id">
-            {{ deletingId === p.id ? "Se șterge..." : "Șterge" }}
-          </button>
+          <div class="rowBtns">
+<button
+  type="button"
+  class="btnOutline"
+  @click="startEdit(p)"
+  :disabled="saving || deletingId === p.id"
+>
+  Editează
+</button>
+<button
+  type="button"
+  class="danger"
+  @click="remove(p.id)"
+  :disabled="deletingId === p.id"
+>
+  {{ deletingId === p.id ? "Se șterge..." : "Șterge" }}
+</button>
+
+</div>
+
         </li>
       </ul>
     </section>
@@ -61,14 +79,14 @@
 
 <script setup>
 import { onMounted, ref } from "vue";
-import { getProducts, addProduct, deleteProduct } from "../services/productsService";
+import { getProducts, addProduct, deleteProduct, updateProduct } from "../services/productsService";
 
 const products = ref([]);
 const loading = ref(false);
 const saving = ref(false);
 const deletingId = ref(null);
 const error = ref("");
-
+const editingId = ref(null);
 const form = ref({
   name: "",
   price: 0,
@@ -91,8 +109,19 @@ const load = async () => {
 };
 
 const reset = () => {
+  editingId.value = null;
   form.value = { name: "", price: 0, description: "" };
 };
+const startEdit = (p) => {
+  editingId.value = p.id;
+  form.value = {
+    name: p.name || "",
+    price: Number(p.price || 0),
+    description: p.description || "",
+  };
+  window.scrollTo({ top: 0, behavior: "smooth" });
+};
+
 
 const submit = async () => {
   if (!form.value.name) {
@@ -102,21 +131,32 @@ const submit = async () => {
 
   saving.value = true;
   try {
-    await addProduct({
+    const payload = {
       name: form.value.name,
       price: Number(form.value.price || 0),
       description: form.value.description || "",
-      createdAt: new Date().toISOString(),
-    });
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (editingId.value) {
+      await updateProduct(editingId.value, payload);
+    } else {
+      await addProduct({
+        ...payload,
+        createdAt: new Date().toISOString(),
+      });
+    }
+
     reset();
     await load();
   } catch (e) {
     console.error(e);
-    alert("Nu am putut adăuga produsul.");
+    alert(editingId.value ? "Nu am putut actualiza produsul." : "Nu am putut adăuga produsul.");
   } finally {
     saving.value = false;
   }
 };
+
 
 const remove = async (id) => {
   const ok = confirm("Sigur vrei să ștergi produsul?");
@@ -135,26 +175,189 @@ onMounted(load);
 </script>
 
 <style scoped>
-.page { max-width: 980px; margin: 24px auto; padding: 0 16px; font-family: system-ui; }
-.header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
-.sub { margin: 6px 0 0; color: #555; font-size: 13px; }
+/* ========== Layout general ========== */
+.page {
+  max-width: 980px;
+  margin: 24px auto;
+  padding: 0 16px;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+}
 
-.card { margin-top: 14px; border: 1px solid #eee; border-radius: 14px; padding: 14px; background: #fff; }
-.label { display:block; margin-top: 10px; font-size: 12px; color:#444; }
-.input { width: 100%; margin-top: 6px; padding: 10px 12px; border: 1px solid #ddd; border-radius: 10px; }
-.row { margin-top: 12px; display:flex; gap:10px; flex-wrap:wrap; }
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
 
-.btn { padding: 10px 12px; border: 1px solid #111; background: #111; color: #fff; border-radius: 10px; cursor:pointer; }
-.btn:disabled { opacity:.6; cursor:not-allowed; }
-.btnOutline { padding: 10px 12px; border: 1px solid #ddd; background: transparent; border-radius: 10px; }
+.sub {
+  margin: 6px 0 0;
+  color: #555;
+  font-size: 13px;
+}
 
-.error { margin-top: 12px; background: #ffecec; color: #a40000; border: 1px solid #ffb3b3; padding: 10px 12px; border-radius: 10px; }
+/* ========== Card formular ========== */
+.card {
+  margin-top: 14px;
+  border: 1px solid #eee;
+  border-radius: 14px;
+  padding: 14px;
+  background: #fff;
+}
 
-.list { margin-top: 16px; }
-.ul { list-style: none; padding: 0; margin: 0; }
-.li { display:flex; justify-content: space-between; gap: 12px; align-items: center;
-  padding: 12px; border: 1px solid #eee; border-radius: 12px; background:#fff; margin-top:10px; }
-.muted { color:#666; font-size: 12px; margin-top: 4px; }
-.danger { padding: 8px 10px; border-radius: 10px; border:1px solid #ffb3b3; background:#fff; cursor:pointer; }
-.empty { color:#666; }
+.label {
+  display: block;
+  margin-top: 10px;
+  font-size: 12px;
+  color: #444;
+}
+
+.input {
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+.input:focus {
+  outline: none;
+  border-color: #111;
+  box-shadow: 0 0 0 2px rgba(0,0,0,0.08);
+}
+
+.row {
+  margin-top: 12px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* ========== Butoane ========== */
+.btn,
+.btnOutline,
+.danger {
+  cursor: pointer;
+  border-radius: 10px;
+  transition:
+    transform 0.08s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+/* Primary */
+.btn {
+  padding: 10px 12px;
+  border: 1px solid #111;
+  background: #111;
+  color: #fff;
+}
+
+.btn:hover {
+  background: #000;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Outline */
+.btnOutline {
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  background: transparent;
+}
+
+.btnOutline:hover {
+  background: #f6f6f6;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.08);
+}
+
+.btnOutline:active {
+  transform: translateY(1px);
+}
+
+/* Danger */
+.danger {
+  padding: 8px 10px;
+  border: 1px solid #ffb3b3;
+  background: #fff;
+  color: #a40000;
+}
+
+.danger:hover {
+  background: #fff1f1;
+  box-shadow: 0 6px 16px rgba(255,0,0,0.08);
+}
+
+.danger:active {
+  transform: translateY(1px);
+}
+
+/* Focus accesibilitate */
+.btn:focus-visible,
+.btnOutline:focus-visible,
+.danger:focus-visible {
+  outline: 2px solid rgba(0,0,0,0.35);
+  outline-offset: 2px;
+}
+
+/* ========== Erori ========== */
+.error {
+  margin-top: 12px;
+  background: #ffecec;
+  color: #a40000;
+  border: 1px solid #ffb3b3;
+  padding: 10px 12px;
+  border-radius: 10px;
+}
+
+/* ========== Listă produse ========== */
+.list {
+  margin-top: 16px;
+}
+
+.ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #eee;
+  border-radius: 12px;
+  background: #fff;
+  margin-top: 10px;
+}
+
+.muted {
+  color: #666;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.rowBtns {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.empty {
+  color: #666;
+}
 </style>
+

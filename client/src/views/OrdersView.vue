@@ -11,22 +11,27 @@
       </button>
     </header>
 
-    <p v-if="error" class="error">{{ error }}</p>
+<p v-if="error" class="error">{{ error }}</p>
 
-    <section v-if="!loading && orders.length === 0" class="empty">
-      Nu există comenzi.
-    </section>
+<section v-if="loading" class="empty">
+  Se încarcă...
+</section>
 
+<section v-else-if="!error && orders.length === 0" class="empty">
+  Nu există comenzi.
+</section>
     <section v-else class="list">
       <article v-for="o in orders" :key="o.id" class="card">
         <div class="top">
           <div>
             <div class="id">Comanda: {{ o.id }}</div>
             <div class="muted">Status: {{ o.status || "noua" }}</div>
+            <div class="muted">
+              Data:
+              {{ formatDate(o.createdAt) }}
+            </div>
           </div>
-          <div class="sum">
-            {{ formatPrice(o.totalPrice) }}
-          </div>
+          <div class="sum">{{ formatPrice(o.totalPrice) }}</div>
         </div>
 
         <div class="muted">
@@ -45,7 +50,7 @@
 
 <script setup>
 import { onMounted, ref } from "vue";
-import { getOrders } from "../services/ordersService";
+import { getMyOrders } from "../services/ordersService";
 
 const orders = ref([]);
 const loading = ref(false);
@@ -53,14 +58,27 @@ const error = ref("");
 
 const formatPrice = (v) => `${Number(v || 0).toFixed(2)} RON`;
 
+const formatDate = (ts) => {
+  // ts poate fi Firestore Timestamp sau null
+  if (!ts) return "—";
+  try {
+    const d = ts?.toDate ? ts.toDate() : new Date(ts);
+    return d.toLocaleString("ro-RO");
+  } catch {
+    return "—";
+  }
+};
+
 const load = async () => {
   loading.value = true;
   error.value = "";
   try {
-    orders.value = await getOrders();
+    
+    orders.value = await getMyOrders(); 
   } catch (e) {
     console.error(e);
-    error.value = "Nu am putut încărca comenzile. Verifică Firestore Rules.";
+error.value = "Nu am putut încărca comenzile. Verifică Firestore Rules / index / conexiunea.";
+    orders.value = [];
   } finally {
     loading.value = false;
   }

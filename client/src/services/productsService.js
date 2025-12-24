@@ -1,20 +1,25 @@
-import { db } from "../firebase/firebase";
-import { collection, getDocs, addDoc, deleteDoc, doc } from "firebase/firestore";
-
-const productsRef = collection(db, "products");
+import { apiFetch } from "./api";
 
 export const getProducts = async () => {
-  const snapshot = await getDocs(productsRef);
-  return snapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data()
-  }));
+  return await apiFetch("/api/products");
 };
 
 export const addProduct = async (product) => {
-  return await addDoc(productsRef, product);
+  return await apiFetch("/api/products", {
+    method: "POST",
+    body: JSON.stringify(product),
+  });
+};
+
+export const updateProduct = async (id, patch) => {
+  return await apiFetch(`/api/products/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(patch),
+  });
 };
 
 export const deleteProduct = async (id) => {
-  return await deleteDoc(doc(db, "products", id));
+  return await apiFetch(`/api/products/${id}`, {
+    method: "DELETE",
+  });
 };

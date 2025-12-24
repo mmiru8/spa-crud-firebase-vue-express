@@ -207,25 +207,20 @@ async function checkHealth() {
 async function loadProducts() {
   loading.value = true;
   error.value = "";
-
   try {
     const res = await fetch(`${apiBase}/api/products`);
     console.log("Products status:", res.status);
 
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-    const data = await res.json();
-    console.log("Loaded products:", data);
-
-    products.value = Array.isArray(data) ? data : [];
+    if (!res.ok) throw new Error("API error");
+    products.value = await res.json();
     lastUpdated.value = Date.now();
   } catch (e) {
-    console.error("loadProducts error:", e);
     error.value = "Eroare la încărcarea produselor din API.";
   } finally {
     loading.value = false;
   }
 }
+
 function refresh() {
   checkHealth();
   loadProducts();
