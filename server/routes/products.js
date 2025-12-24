@@ -5,7 +5,7 @@ const { requireAuth } = require("../middleware/auth");
 const { requireAdmin } = require("../middleware/adminOnly");
 
 // READ (user)
-router.get("/", requireAuth, async (req, res) => {
+router.get("/", async (req, res) => {
   try {
     const snapshot = await db.collection("products").get();
     const products = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
@@ -68,8 +68,12 @@ router.put("/:id", requireAuth, requireAdmin, async (req, res) => {
 
     patch.updatedAt = new Date().toISOString();
 
-    await db.collection("products").doc(id).update(patch);
-    res.json({ ok: true });
+const ref = db.collection("products").doc(id);
+const snap = await ref.get();
+if (!snap.exists) return res.status(404).json({ message: "Product not found" });
+
+await ref.update(patch);
+res.status(204).send();
   } catch (e) {
     res.status(500).json({ message: "Eroare la actualizare produs" });
   }
