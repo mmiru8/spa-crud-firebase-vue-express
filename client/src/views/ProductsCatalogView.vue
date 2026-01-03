@@ -24,6 +24,9 @@
         <option value="name-desc">Nume (Z → A)</option>
         <option value="price-asc">Preț (mic → mare)</option>
         <option value="price-desc">Preț (mare → mic)</option>
+        <option value="cat-price-name-asc">Categorie → Preț → Nume (↑)</option>
+<option value="cat-price-name-desc">Categorie → Preț → Nume (↓)</option>
+
       </select>
     </section>
 
@@ -34,7 +37,7 @@
     </section>
 
     <section class="grid" v-else>
-      <article v-for="p in filteredSorted" :key="p.id" class="card">
+<article v-for="p in filteredSorted" :key="p.id" class="card">
         <div class="cardTop">
           <h3 class="title">{{ p.name }}</h3>
           <div class="price">{{ formatPrice(p.price) }}</div>
@@ -112,21 +115,45 @@ const filteredSorted = computed(() => {
     .filter((p) => (p.name || "").toLowerCase().includes(q))
     .slice();
 
-  const [key, dir] = sortKey.value.split("-");
-  arr.sort((a, b) => {
-    if (key === "name") {
-      const A = (a.name || "").toLowerCase();
-      const B = (b.name || "").toLowerCase();
-      return dir === "asc" ? A.localeCompare(B) : B.localeCompare(A);
-    }
-    if (key === "price") {
-      const A = toNumber(a.price);
-      const B = toNumber(b.price);
-      return dir === "asc" ? A - B : B - A;
-    }
-    return 0;
-  });
+const parts = sortKey.value.split("-");
+const dir = parts[parts.length - 1]; // asc / desc
+const key = parts.slice(0, -1).join("-"); // name / price / cat-price-name
 
+arr.sort((a, b) => {
+  const sign = dir === "asc" ? 1 : -1;
+
+  // basic
+  if (key === "name") {
+    const A = (a.name || "").toLowerCase();
+    const B = (b.name || "").toLowerCase();
+    return sign * A.localeCompare(B);
+  }
+
+  if (key === "price") {
+    const A = toNumber(a.price);
+    const B = toNumber(b.price);
+    return sign * (A - B);
+  }
+
+  // ADVANCED: category -> price -> name
+  if (key === "cat-price-name") {
+    const catA = (a.category?.name || a.category?.id || "").toLowerCase();
+    const catB = (b.category?.name || b.category?.id || "").toLowerCase();
+    const c = catA.localeCompare(catB);
+    if (c) return sign * c;
+
+    const pA = toNumber(a.price);
+    const pB = toNumber(b.price);
+    const p = pA - pB;
+    if (p) return sign * p;
+
+    const nA = (a.name || "").toLowerCase();
+    const nB = (b.name || "").toLowerCase();
+    return sign * nA.localeCompare(nB);
+  }
+
+  return 0;
+});
   return arr;
 });
 
