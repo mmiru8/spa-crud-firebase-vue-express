@@ -35,12 +35,12 @@
         </div>
 
         <div class="muted">
-          Produse: {{ o.totalItems || (o.items ? o.items.length : 0) }}
+          Produse: {{ o.totalItems || (o.products ? o.products.length : 0) }}
         </div>
 
-        <ul class="items" v-if="o.items?.length">
-          <li v-for="it in o.items" :key="it.productId">
-            {{ it.name }} × {{ it.qty }} ({{ formatPrice(it.price) }})
+        <ul class="items" v-if="o.products?.length">
+          <li v-for="it in o.products" :key="it.productId">
+            {{ it.productSnapshot.name }} × {{ it.quantity }} ({{ formatPrice(it.priceAtPurchase) }})
           </li>
         </ul>
       </article>

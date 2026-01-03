@@ -12,8 +12,6 @@ import { useAuthStore } from "../stores/authStore";
 
 const routes = [
   { path: "/", component: HomeView },
-{ path: "/:pathMatch(.*)*", component: NotFoundView },
-
   // public
   { path: "/login", component: LoginView },
   { path: "/register", component: RegisterView },
@@ -41,8 +39,8 @@ const routes = [
     component: ProductsAdminView,
     meta: { requiresAdmin: true },
   },
+    { path: "/:pathMatch(.*)*", component: NotFoundView },
 ];
-
 const router = createRouter({
   history: createWebHistory(),
   routes,

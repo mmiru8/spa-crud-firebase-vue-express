@@ -7,20 +7,72 @@ const { requireAdmin } = require("../middleware/adminOnly");
 // USER: create own order
 router.post("/", requireAuth, async (req, res) => {
   try {
-    const { items = [], totalItems = 0, totalPrice = 0 } = req.body;
+const { items = [] } = req.body;
 
     if (!Array.isArray(items) || items.length === 0)
       return res.status(400).json({ message: "Items required" });
 
-    const docRef = await db.collection("orders").add({
-      items,
-      totalItems: Number(totalItems || 0),
-      totalPrice: Number(totalPrice || 0),
-      userId: req.user.uid,
-      userEmail: req.user.email || "",
-      status: "noua",
-      createdAt: new Date().toISOString(),
-    });
+const now = new Date().toISOString();
+
+// items trebuie să conțină minim: [{ productId, qty }]
+const normalized = items.map((it) => ({
+  productId: String(it.productId || "").trim(),
+  quantity: Number(it.qty ?? it.quantity ?? 0),
+}));
+
+if (
+  normalized.some(
+    (it) => !it.productId || !Number.isFinite(it.quantity) || it.quantity < 1
+  )
+) {
+  return res.status(400).json({ message: "Invalid items" });
+}
+
+// luăm produsele din DB pentru snapshot + priceAtPurchase
+const productSnaps = await Promise.all(
+  normalized.map((it) => db.collection("products").doc(it.productId).get())
+);
+
+if (productSnaps.some((s) => !s.exists)) {
+  return res.status(400).json({ message: "One or more products not found" });
+}
+
+const products = normalized.map((it, idx) => {
+  const data = productSnaps[idx].data();
+  const price = Number(data.price || 0);
+
+  return {
+    productId: it.productId,
+    quantity: it.quantity,
+    priceAtPurchase: price,
+    productSnapshot: {
+      name: data.name || "",
+      slug: data.slug || "",
+      price,
+    },
+  };
+});
+
+const totalItems = products.reduce((sum, p) => sum + p.quantity, 0);
+const totalPrice = products.reduce(
+  (sum, p) => sum + p.quantity * p.priceAtPurchase,
+  0
+);
+
+const docRef = await db.collection("orders").add({
+  userId: req.user.uid,
+  userEmail: req.user.email || "",
+  status: "noua",
+
+  products,
+  totalItems,
+  totalPrice,
+
+  createdAt: now,
+  updatedAt: now,
+});
+
+
 
     res.status(201).json({ id: docRef.id });
   } catch (e) {

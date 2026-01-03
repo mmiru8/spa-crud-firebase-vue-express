@@ -3,6 +3,18 @@ const router = express.Router();
 const { db } = require("../firebaseAdmin");
 const { requireAuth } = require("../middleware/auth");
 const { requireAdmin } = require("../middleware/adminOnly");
+const slugify = (s = "") =>
+  s
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/ă/g, "a")
+    .replace(/â/g, "a")
+    .replace(/î/g, "i")
+    .replace(/ș/g, "s")
+    .replace(/ț/g, "t")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)+/g, "");
 
 // READ (user)
 router.get("/", async (req, res) => {
@@ -26,17 +38,27 @@ router.post("/", requireAuth, requireAdmin, async (req, res) => {
     const p = Number(price);
     if (!Number.isFinite(p) || p < 0)
       return res.status(400).json({ message: "Invalid price" });
+const now = new Date().toISOString();
+const slug = slugify(name);
 
-    const docRef = await db.collection("products").add({
-      name: name.trim(),
-      price: p,
-      description: String(description || ""),
-      category,
-      inventory,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
+const docRef = await db.collection("products").add({
+  name: name.trim(),
+  slug,
+  price: p,
+  description: String(description || ""),
+  category,
+  inventory,
 
+  createdAt: now,
+  updatedAt: now,
+  createdBy: req.user.uid,
+
+  metadata: {
+    createdAt: now,
+    updatedAt: now,
+    createdBy: req.user.uid,
+  },
+});
     res.status(201).json({ id: docRef.id });
   } catch (e) {
     res.status(500).json({ message: "Eroare la adăugare produs" });
@@ -52,7 +74,9 @@ router.put("/:id", requireAuth, requireAdmin, async (req, res) => {
     if ("name" in req.body) {
       if (typeof req.body.name !== "string" || req.body.name.trim().length < 2)
         return res.status(400).json({ message: "Invalid name" });
-      patch.name = req.body.name.trim();
+const nm = req.body.name.trim();
+patch.name = nm;
+patch.slug = slugify(nm);
     }
 
     if ("price" in req.body) {
@@ -66,7 +90,9 @@ router.put("/:id", requireAuth, requireAdmin, async (req, res) => {
     if ("category" in req.body) patch.category = req.body.category ?? null;
     if ("inventory" in req.body) patch.inventory = req.body.inventory ?? null;
 
-    patch.updatedAt = new Date().toISOString();
+const now = new Date().toISOString();
+patch.updatedAt = now;
+patch["metadata.updatedAt"] = now;
 
 const ref = db.collection("products").doc(id);
 const snap = await ref.get();
