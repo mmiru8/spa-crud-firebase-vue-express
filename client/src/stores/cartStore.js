@@ -1,8 +1,24 @@
 import { defineStore } from "pinia";
+const STORAGE_KEY = "nailshop_cart_v1";
+
+const loadCartState = () => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+const saveCartState = (items) => {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  } catch {}
+};
 
 export const useCartStore = defineStore("cart", {
   state: () => ({
-    items: [], // [{ id, name, price, qty }]
+    items: loadCartState() || [], // [{ id, name, price, qty }]
   }),
 
   getters: {
@@ -26,12 +42,14 @@ export const useCartStore = defineStore("cart", {
           price: Number(product.price || 0),
           qty: 1,
         });
+         saveCartState(this.items);
       }
     },
 
     increase(id) {
       const it = this.items.find((x) => x.id === id);
       if (it) it.qty += 1;
+      saveCartState(this.items);
     },
 
     decrease(id) {
@@ -39,6 +57,7 @@ export const useCartStore = defineStore("cart", {
       if (!it) return;
       it.qty -= 1;
       if (it.qty <= 0) this.items = this.items.filter((x) => x.id !== id);
+      saveCartState(this.items);
     },
 
     remove(id) {
@@ -47,6 +66,7 @@ export const useCartStore = defineStore("cart", {
 
     clear() {
       this.items = [];
+      saveCartState(this.items);
     },
   },
 });

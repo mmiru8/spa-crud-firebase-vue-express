@@ -212,7 +212,8 @@ async function loadProducts() {
     console.log("Products status:", res.status);
 
     if (!res.ok) throw new Error("API error");
-    products.value = await res.json();
+    const data = await res.json();
+    products.value = data.items || [];
     lastUpdated.value = Date.now();
   } catch (e) {
     error.value = "Eroare la încărcarea produselor din API.";
