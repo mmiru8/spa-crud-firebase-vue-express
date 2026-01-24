@@ -4,83 +4,91 @@ const { db } = require("../firebaseAdmin");
 const { requireAuth } = require("../middleware/auth");
 const { requireAdmin } = require("../middleware/adminOnly");
 
-// USER: create own order
 router.post("/", requireAuth, async (req, res) => {
   try {
-const { items = [] } = req.body;
+    const { products = [] } = req.body;
 
-    if (!Array.isArray(items) || items.length === 0)
-      return res.status(400).json({ message: "Items required" });
+    // 1) validare
+    if (!Array.isArray(products) || products.length === 0) {
+      return res.status(400).json({ message: "Products required" });
+    }
 
-const now = new Date().toISOString();
+    const normalized = products.map((it) => ({
+      productId: String(it.productId || "").trim(),
+      quantity: Number(it.quantity ?? 0),
+    }));
 
-// items trebuie să conțină minim: [{ productId, qty }]
-const normalized = items.map((it) => ({
-  productId: String(it.productId || "").trim(),
-  quantity: Number(it.qty ?? it.quantity ?? 0),
-}));
+    if (
+      normalized.some(
+        (it) => !it.productId || !Number.isFinite(it.quantity) || it.quantity < 1
+      )
+    ) {
+      return res.status(400).json({ message: "Invalid products" });
+    }
 
-if (
-  normalized.some(
-    (it) => !it.productId || !Number.isFinite(it.quantity) || it.quantity < 1
-  )
-) {
-  return res.status(400).json({ message: "Invalid items" });
-}
+    // 2) luăm produsele din DB (1 singur fetch per produs)
+    const uniqueIds = Array.from(new Set(normalized.map((x) => x.productId)));
+    const refs = uniqueIds.map((id) => db.collection("products").doc(id));
+    const snaps = await db.getAll(...refs);
 
-// luăm produsele din DB pentru snapshot + priceAtPurchase
-const productSnaps = await Promise.all(
-  normalized.map((it) => db.collection("products").doc(it.productId).get())
-);
+    const mapById = new Map();
+    snaps.forEach((s) => {
+      if (s.exists) mapById.set(s.id, s.data());
+    });
 
-if (productSnaps.some((s) => !s.exists)) {
-  return res.status(400).json({ message: "One or more products not found" });
-}
+    const missing = uniqueIds.find((id) => !mapById.has(id));
+    if (missing) {
+      return res.status(400).json({ message: `Product not found: ${missing}` });
+    }
 
-const products = normalized.map((it, idx) => {
-  const data = productSnaps[idx].data();
-  const price = Number(data.price || 0);
+    // 3) build products[] cu snapshot + priceAtPurchase + slug
+    const finalProducts = normalized.map((it) => {
+      const data = mapById.get(it.productId);
 
-  return {
-    productId: it.productId,
-    quantity: it.quantity,
-    priceAtPurchase: price,
-    productSnapshot: {
-      name: data.name || "",
-      slug: data.slug || "",
-      price,
-    },
-  };
-});
+      const price = Number(data.price || 0);
 
-const totalItems = products.reduce((sum, p) => sum + p.quantity, 0);
-const totalPrice = products.reduce(
-  (sum, p) => sum + p.quantity * p.priceAtPurchase,
-  0
-);
+      return {
+        productId: it.productId,
+        quantity: it.quantity,
+        priceAtPurchase: price,
+        productSnapshot: {
+          name: String(data.name || ""),
+          price: price,
+          slug: String(data.slug || ""),
+        },
+      };
+    });
 
-const docRef = await db.collection("orders").add({
-  userId: req.user.uid,
-  userEmail: req.user.email || "",
-  status: "noua",
+    // 4) calcule pe server
+    const totalItems = finalProducts.reduce((sum, p) => sum + p.quantity, 0);
+    const totalPrice = finalProducts.reduce(
+      (sum, p) => sum + p.quantity * p.priceAtPurchase,
+      0
+    );
 
-  products,
-  totalItems,
-  totalPrice,
+    const now = new Date().toISOString();
 
-  createdAt: now,
-  updatedAt: now,
-});
+    // 5) save order
+    const docRef = await db.collection("orders").add({
+      userId: req.user.uid,
+      userEmail: req.user.email || "",
+      status: "noua",
 
+      products: finalProducts,
+      totalItems,
+      totalPrice,
 
+      createdAt: now,
+      updatedAt: now,
+    });
 
-    res.status(201).json({ id: docRef.id });
+    return res.status(201).json({ id: docRef.id });
   } catch (e) {
-    res.status(500).json({ message: "Eroare la creare comandă" });
+    console.error(e);
+    return res.status(500).json({ message: "Eroare la creare comandă" });
   }
 });
 
-// USER: get my orders
 router.get("/my", requireAuth, async (req, res) => {
   try {
     const snap = await db
@@ -89,8 +97,9 @@ router.get("/my", requireAuth, async (req, res) => {
       .get();
 
     const orders = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    // sortare locală desc după createdAt (string ISO)
-    orders.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+    orders.sort((a, b) =>
+      String(b.createdAt || "").localeCompare(String(a.createdAt || ""))
+    );
 
     res.json(orders);
   } catch (e) {
@@ -98,7 +107,6 @@ router.get("/my", requireAuth, async (req, res) => {
   }
 });
 
-// ADMIN: get all orders
 router.get("/", requireAuth, requireAdmin, async (req, res) => {
   try {
     const snap = await db.collection("orders").get();
@@ -108,15 +116,14 @@ router.get("/", requireAuth, requireAdmin, async (req, res) => {
     res.status(500).json({ message: "Eroare la citire comenzi (admin)" });
   }
 });
-
-// ADMIN: update order status
 router.put("/:id/status", requireAuth, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
 
-    if (typeof status !== "string" || status.trim().length < 2)
+    if (typeof status !== "string" || status.trim().length < 2) {
       return res.status(400).json({ message: "Invalid status" });
+    }
 
     await db.collection("orders").doc(id).update({
       status: status.trim(),

@@ -76,13 +76,13 @@ const placeOrder = async () => {
 
   placing.value = true;
   try {
-await createOrder({
-  items: cart.items.map((it) => ({
-    productId: it.id,
-    qty: Number(it.qty || 1),
-  })),
-});
 
+    await createOrder({
+      products: cart.items.map((it) => ({
+        productId: it.id,
+        quantity: Number(it.qty || 1),
+     })),
+    });
 
     cart.clear();
     router.push("/comenzi");
