@@ -1,43 +1,97 @@
 # Aplicație SPA (Single Page Application) cu operații CRUD – Vue 3 + Express + Firebase (Firestore)
 
 ## Descriere
-Această aplicație este un proiect full-stack care implementează o arhitectură separată:
-- **Frontend:** Vue 3 (Composition API) + Router + Pinia
-- **Backend:** Node.js + Express (API REST)
-- **Bază de date:** Firebase Firestore (modelare NoSQL)
-- **Autentificare:** Firebase Authentication (și protejarea rutelor care modifică datele)
+Această aplicație este un proiect full-stack care implementează o arhitectură separată frontend–backend, având ca scop gestionarea unor obiecte relaționate folosind Firebase Firestore (NoSQL).
 
-Aplicația gestionează **Produse** și **Comenzi** (obiecte relaționate).
+Tehnologii utilizate:
+- Frontend: Vue 3 (Composition API), Vue Router, Pinia
+- Backend: Node.js, Express (API REST)
+- Bază de date: Firebase Firestore (NoSQL)
+- Autentificare: Firebase Authentication
+
+Aplicația gestionează două entități principale:
+- Produse
+- Comenzi
+
+---
 
 ## Funcționalități
+
 ### Autentificare
-- Înregistrare / autentificare utilizator
-- Protejarea rutelor care fac modificări (Create/Update/Delete)
+- Înregistrare utilizator
+- Autentificare utilizator
+- Protejarea rutelor care modifică datele (Create / Update / Delete)
+- Separarea rolurilor (utilizator / administrator)
 
 ### Produse (CRUD)
 - Listare produse
-- Adăugare produs
+- Adăugare produs (admin)
 - Editare produs
 - Ștergere produs
-- Căutare / sortare (opțional)
+- Căutare după nume
+- Sortare avansată după mai multe criterii (categorie, preț, nume)
+- Paginare cu infinite scroll
 
 ### Comenzi (CRUD)
-- Creare comandă pe baza produselor existente
-- Listare comenzi per utilizator
-- Actualizare status comandă
-- Ștergere comandă (opțional)
+- Creare comandă pe baza produselor din coș
+- Calcularea valorilor totale exclusiv pe server
+- Salvarea unui snapshot al produselor la momentul comenzii
+- Listarea comenzilor pentru utilizatorul autentificat
+- Actualizarea statusului comenzilor (admin)
 
-## Modelare date (Firestore – NoSQL)
-- `products` conține și sub-structuri: `category`, `specifications`, `inventory`, `metadata`
-- `orders` conține: `userId`, listă `products[]` cu `productSnapshot` pentru istoric
+---
 
-## Structura proiectului (monorepo)
-- `server/` – Express API
-- `client/` – Vue 3 SPA
+## Modelare date – Firestore (NoSQL)
+
+### Colecția products
+- name
+- slug
+- price
+- description
+- category
+- inventory
+- metadata:
+  - createdAt
+  - updatedAt
+  - createdBy
+
+### Colecția orders
+- userId
+- userEmail
+- products[]:
+  - productId
+  - quantity
+  - priceAtPurchase
+  - productSnapshot
+- totalItems
+- totalPrice
+- status
+- createdAt
+- updatedAt
+
+Modelarea datelor respectă principiile NoSQL și evită relațiile de tip SQL.
+
+---
 
 ## Rulare locală
-### 1) Backend (Express)
-```bash
+
+### Backend (Express)
 cd server
 npm install
 npm run dev
+
+Serverul rulează implicit pe:
+http://localhost:4000
+
+### Frontend (Vue 3)
+cd client
+npm install
+npm run dev
+
+Aplicația este disponibilă la:
+http://localhost:5173
+
+---
+
+## Observații finale
+Aplicația respectă cerințele proiectului, utilizează o arhitectură corect separată frontend–backend, o modelare NoSQL adecvată pentru Firestore, autentificare funcțională și un istoric GitHub care reflectă dezvoltarea incrementală a proiectului.
