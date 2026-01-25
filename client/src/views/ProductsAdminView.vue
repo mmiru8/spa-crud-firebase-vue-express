@@ -79,13 +79,19 @@
 
 <script setup>
 import { onMounted, ref } from "vue";
-import { getProducts, addProduct, deleteProduct, updateProduct } from "../services/productsService";
+import {
+  getProductsAdminAll,
+  addProduct,
+  deleteProduct,
+  updateProduct,
+} from "../services/productsService";
 
 const products = ref([]);
 const loading = ref(false);
 const saving = ref(false);
 const deletingId = ref(null);
 const error = ref("");
+
 const editingId = ref(null);
 const form = ref({
   name: "",
@@ -99,7 +105,7 @@ const load = async () => {
   loading.value = true;
   error.value = "";
   try {
-    products.value = await getProducts();
+    products.value = await getProductsAdminAll();
   } catch (e) {
     error.value = "Nu am putut încărca produsele.";
     console.error(e);
@@ -112,6 +118,7 @@ const reset = () => {
   editingId.value = null;
   form.value = { name: "", price: 0, description: "" };
 };
+
 const startEdit = (p) => {
   editingId.value = p.id;
   form.value = {
@@ -121,7 +128,6 @@ const startEdit = (p) => {
   };
   window.scrollTo({ top: 0, behavior: "smooth" });
 };
-
 
 const submit = async () => {
   if (!form.value.name) {
@@ -135,28 +141,27 @@ const submit = async () => {
       name: form.value.name,
       price: Number(form.value.price || 0),
       description: form.value.description || "",
-      updatedAt: new Date().toISOString(),
     };
 
     if (editingId.value) {
       await updateProduct(editingId.value, payload);
     } else {
-      await addProduct({
-        ...payload,
-        createdAt: new Date().toISOString(),
-      });
+      await addProduct(payload);
     }
 
     reset();
     await load();
   } catch (e) {
     console.error(e);
-    alert(editingId.value ? "Nu am putut actualiza produsul." : "Nu am putut adăuga produsul.");
+    alert(
+      editingId.value
+        ? "Nu am putut actualiza produsul."
+        : "Nu am putut adăuga produsul."
+    );
   } finally {
     saving.value = false;
   }
 };
-
 
 const remove = async (id) => {
   const ok = confirm("Sigur vrei să ștergi produsul?");
@@ -173,6 +178,7 @@ const remove = async (id) => {
 
 onMounted(load);
 </script>
+
 
 <style scoped>
 /* ========== Layout general ========== */

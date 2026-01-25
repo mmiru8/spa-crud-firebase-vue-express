@@ -6,7 +6,7 @@
         <p class="sub">Produse pentru unghii – listare (client)</p>
       </div>
 
-      <button class="btn" @click="refresh" :disabled="loading || loadingMore">
+      <button class="btn" @click="refresh" :disabled="loading">
         {{ loading ? "Se încarcă..." : "Reîmprospătează" }}
       </button>
     </header>
@@ -20,6 +20,7 @@
       />
 
       <select v-model="sortKey" class="select">
+        <option value="newest">Cele mai noi</option>
         <option value="name-asc">Nume (A → Z)</option>
         <option value="name-desc">Nume (Z → A)</option>
         <option value="price-asc">Preț (mic → mare)</option>
@@ -58,11 +59,18 @@
       </article>
     </section>
 
-    <!-- punctul “invizibil” care declanșează încărcarea următoarei pagini -->
-    <div ref="sentinel" class="sentinel" v-if="hasMore"></div>
+    <!-- Load more / Infinite scroll sentinel -->
+    <div class="loadMoreWrap" v-if="!loading && !allDone && filteredSorted.length > 0">
+      <button class="btn" @click="loadMore" :disabled="loadingMore">
+        {{ loadingMore ? "Se încarcă..." : "Încarcă mai multe" }}
+      </button>
+      <div class="hint">
+        Infinite scroll este activ doar pe „Cele mai noi” fără căutare.
+      </div>
+    </div>
 
-    <p v-if="loadingMore" class="mutedLine">Se încarcă mai multe produse...</p>
-    <p v-if="!hasMore && products.length" class="mutedLine">Ai ajuns la final.</p>
+    <!-- sentinel: doar când are voie infinite scroll -->
+    <div ref="sentinel" class="sentinel" v-if="canInfiniteScroll"></div>
 
     <Toast :model-value="toast" />
   </div>
@@ -71,35 +79,167 @@
 <script setup>
 import BaseButton from "../components/BaseButton.vue";
 import Toast from "../components/Toast.vue";
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { getProducts } from "../services/productsService";
+import { computed, onMounted, onBeforeUnmount, ref, watch } from "vue";
 import { useCartStore } from "../stores/cartStore";
+
+// IMPORTANT: endpoint-ul tău întoarce { items, nextCursor }
+const API_BASE = import.meta.env.VITE_API_BASE;
 
 const cart = useCartStore();
 
-// ===== state listă produse =====
-const products = ref([]);
+const products = ref([]);        // tot ce am încărcat până acum
+const cursor = ref(null);        // nextCursor din backend
+const allDone = ref(false);      // nu mai avem pagini
+
 const loading = ref(false);
 const loadingMore = ref(false);
 const error = ref("");
 
-// ===== search + sort =====
 const query = ref("");
-const sortKey = ref("name-asc");
+const sortKey = ref("newest");
 
-// ===== pagination =====
-const cursor = ref("");     // nextCursor primit din API
-const hasMore = ref(true);  // mai există pagini?
-const pageSize = 12;
-
-// ===== infinite scroll =====
 const sentinel = ref(null);
-let observer = null;
+let io = null;
 
-// ===== toast =====
+const MAX_ITEMS = 60;            // ca să nu mai ai „prea multe produse”
+const PAGE_SIZE = 12;
+
+const toNumber = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const formatPrice = (v) => {
+  const n = toNumber(v);
+  return `${n.toFixed(2)} RON`;
+};
+
+// infinite scroll doar pe default (newest) și fără căutare
+const canInfiniteScroll = computed(() => {
+  return sortKey.value === "newest" && query.value.trim() === "" && !allDone.value;
+});
+
+async function fetchPage({ reset = false } = {}) {
+  if (reset) {
+    products.value = [];
+    cursor.value = null;
+    allDone.value = false;
+  }
+
+  // limit hard ca să nu mai ai 200 produse în UI
+  if (products.value.length >= MAX_ITEMS) {
+    allDone.value = true;
+    return;
+  }
+
+  const limit = Math.min(PAGE_SIZE, MAX_ITEMS - products.value.length);
+  const qs = new URLSearchParams();
+  qs.set("limit", String(limit));
+  if (cursor.value) qs.set("cursor", cursor.value);
+
+  const res = await fetch(`${API_BASE}/api/products?${qs.toString()}`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new Error(data?.message || "Eroare API produse");
+  }
+
+  const data = await res.json(); // { items, nextCursor }
+  const incoming = Array.isArray(data.items) ? data.items : [];
+
+  // concat + dedup
+  const map = new Map(products.value.map((p) => [p.id, p]));
+  for (const p of incoming) map.set(p.id, p);
+  products.value = Array.from(map.values());
+
+  cursor.value = data.nextCursor || null;
+  if (!cursor.value || incoming.length === 0) allDone.value = true;
+}
+
+async function refresh() {
+  loading.value = true;
+  error.value = "";
+  try {
+    await fetchPage({ reset: true });
+  } catch (e) {
+    console.error(e);
+    error.value = "Nu am putut încărca produsele.";
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function loadMore() {
+  if (allDone.value) return;
+  loadingMore.value = true;
+  error.value = "";
+  try {
+    await fetchPage({ reset: false });
+  } catch (e) {
+    console.error(e);
+    error.value = "Nu am putut încărca încă o pagină.";
+  } finally {
+    loadingMore.value = false;
+  }
+}
+
+const filteredSorted = computed(() => {
+  const q = query.value.toLowerCase().trim();
+
+  // filtrare
+  let arr = products.value
+    .filter((p) => (p.name || "").toLowerCase().includes(q))
+    .slice();
+
+  // sortare
+  if (sortKey.value === "newest") {
+    // newest = createdAt desc (string ISO) + fallback id
+    arr.sort((a, b) =>
+      String(b.createdAt || "").localeCompare(String(a.createdAt || "")) ||
+      String(b.id || "").localeCompare(String(a.id || ""))
+    );
+    return arr;
+  }
+
+  const parts = sortKey.value.split("-");
+  const dir = parts[parts.length - 1]; // asc / desc
+  const key = parts.slice(0, -1).join("-"); // name / price / cat-price-name
+  const sign = dir === "asc" ? 1 : -1;
+
+  arr.sort((a, b) => {
+    if (key === "name") {
+      return sign * String(a.name || "").toLowerCase().localeCompare(String(b.name || "").toLowerCase());
+    }
+    if (key === "price") {
+      return sign * (toNumber(a.price) - toNumber(b.price));
+    }
+    if (key === "cat-price-name") {
+      const catA = (a.category?.name || a.category?.id || "").toLowerCase();
+      const catB = (b.category?.name || b.category?.id || "").toLowerCase();
+      const c = catA.localeCompare(catB);
+      if (c) return sign * c;
+
+      const p = toNumber(a.price) - toNumber(b.price);
+      if (p) return sign * p;
+
+      return sign * String(a.name || "").toLowerCase().localeCompare(String(b.name || "").toLowerCase());
+    }
+    return 0;
+  });
+
+  return arr;
+});
+
+// dacă user schimbă căutare/sort, nu mai vrem să tot încarce automat -> rămânem pe ce e încărcat.
+// dacă vrei să fie „curat”, poți să dai refresh automat:
+watch([query, sortKey], async ([q, sk], [oldQ, oldSk]) => {
+  // dacă revine pe newest + query gol => reactivăm infinite și reîncarcăm de la zero
+  if (sk === "newest" && q.trim() === "") {
+    await refresh();
+  }
+});
+
 const toast = ref("");
 let toastTimer = null;
-
 const showToast = (msg) => {
   toast.value = msg;
   if (toastTimer) clearTimeout(toastTimer);
@@ -109,126 +249,37 @@ const showToast = (msg) => {
   }, 2000);
 };
 
-const toNumber = (v) => {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
-};
-
-const formatPrice = (v) => `${toNumber(v).toFixed(2)} RON`;
-
 const addToCart = (p) => {
   cart.addToCart(p);
-  showToast(`✅ "${p.name}" a fost adăugat în coș`);
+  showToast(`"${p.name}" a fost adăugat în coș`);
 };
 
-// ===== load pagină (reset = true → începe de la 0) =====
-const load = async (reset = false) => {
-  if (reset) {
-    products.value = [];
-    cursor.value = "";
-    hasMore.value = true;
-  }
+function setupIO() {
+  if (io) io.disconnect();
+  if (!sentinel.value) return;
 
-  if (!hasMore.value) return;
-
-  error.value = "";
-
-  // prima pagină -> loading, pagini următoare -> loadingMore
-  if (products.value.length === 0) loading.value = true;
-  else loadingMore.value = true;
-
-  try {
-    // API returnează: { items: [...], nextCursor: "createdAt|docId" }
-    const resp = await getProducts({ limit: pageSize, cursor: cursor.value });
-
-    const items = resp?.items || [];
-    const next = resp?.nextCursor || null;
-
-    products.value.push(...items);
-
-    cursor.value = next || "";
-    hasMore.value = Boolean(next) && items.length > 0;
-  } catch (e) {
-    console.error(e);
-    error.value = "Nu am putut încărca produsele. Verifică serverul / token / CORS.";
-  } finally {
-    loading.value = false;
-    loadingMore.value = false;
-  }
-};
-
-// buton “Reîmprospătează”
-const refresh = async () => {
-  await load(true);
-};
-
-// ===== sortare + filtrare (pe ce ai încărcat) =====
-const filteredSorted = computed(() => {
-  const q = query.value.toLowerCase();
-
-  const arr = products.value
-    .filter((p) => (p.name || "").toLowerCase().includes(q))
-    .slice();
-
-  const parts = sortKey.value.split("-");
-  const dir = parts[parts.length - 1]; // asc / desc
-  const key = parts.slice(0, -1).join("-"); // name / price / cat-price-name
-
-  arr.sort((a, b) => {
-    const sign = dir === "asc" ? 1 : -1;
-
-    if (key === "name") {
-      const A = (a.name || "").toLowerCase();
-      const B = (b.name || "").toLowerCase();
-      return sign * A.localeCompare(B);
+  io = new IntersectionObserver(async (entries) => {
+    const ent = entries[0];
+    if (ent.isIntersecting && canInfiniteScroll.value && !loadingMore.value) {
+      await loadMore();
     }
-
-    if (key === "price") {
-      const A = toNumber(a.price);
-      const B = toNumber(b.price);
-      return sign * (A - B);
-    }
-
-    if (key === "cat-price-name") {
-      const catA = (a.category?.name || a.category?.id || "").toLowerCase();
-      const catB = (b.category?.name || b.category?.id || "").toLowerCase();
-      const c = catA.localeCompare(catB);
-      if (c) return sign * c;
-
-      const pA = toNumber(a.price);
-      const pB = toNumber(b.price);
-      const p = pA - pB;
-      if (p) return sign * p;
-
-      const nA = (a.name || "").toLowerCase();
-      const nB = (b.name || "").toLowerCase();
-      return sign * nA.localeCompare(nB);
-    }
-
-    return 0;
   });
 
-  return arr;
+  io.observe(sentinel.value);
+}
+
+watch(canInfiniteScroll, () => {
+  // reconfigurează observer când se activează/dezactivează
+  setTimeout(setupIO, 0);
 });
 
-// ===== mount =====
 onMounted(async () => {
-  await load(true);
-
-  observer = new IntersectionObserver(
-    async ([entry]) => {
-      if (entry.isIntersecting && !loadingMore.value && hasMore.value) {
-        await load(false);
-      }
-    },
-    { threshold: 0.1 }
-  );
-
-  if (sentinel.value) observer.observe(sentinel.value);
+  await refresh();
+  setupIO();
 });
 
 onBeforeUnmount(() => {
-  if (observer) observer.disconnect();
+  if (io) io.disconnect();
 });
 </script>
 
@@ -261,7 +312,7 @@ h1 { margin: 0; font-size: 28px; }
   outline: none;
 }
 .input { flex: 1; min-width: 220px; }
-.select { min-width: 170px; }
+.select { min-width: 220px; }
 
 .btn {
   padding: 10px 12px;
@@ -325,8 +376,15 @@ h1 { margin: 0; font-size: 28px; }
 }
 .actions { margin-top: 12px; }
 
+.loadMoreWrap {
+  margin: 18px 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.hint { font-size: 12px; color: #666; }
+
 .sentinel { height: 1px; }
-.mutedLine { margin-top: 12px; color: #666; font-size: 13px; }
 
 @media (max-width: 900px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }

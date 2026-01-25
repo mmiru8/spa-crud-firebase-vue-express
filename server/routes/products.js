@@ -20,6 +20,22 @@ const slugify = (s = "") =>
     .replace(/(^-|-$)+/g, "");
 
 // =====================
+// READ ALL (admin) - fără paginare
+// GET /api/products/all
+// IMPORTANT: trebuie să fie înainte de orice rută cu "/:id"
+// =====================
+router.get("/all", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const snap = await db.collection("products").orderBy("createdAt", "desc").get();
+    const items = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    return res.json(items);
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ message: "Eroare la citirea produselor (admin)" });
+  }
+});
+
+// =====================
 // READ (public) + pagination
 // GET /api/products?limit=12&cursor=createdAt|docId
 // =====================
@@ -85,10 +101,11 @@ router.post("/", requireAuth, requireAdmin, async (req, res) => {
     }
 
     const now = new Date().toISOString();
-    const slug = slugify(name);
+    const nm = name.trim();
+    const slug = slugify(nm);
 
     const docRef = await db.collection("products").add({
-      name: name.trim(),
+      name: nm,
       slug,
       price: p,
       description: String(description || ""),
@@ -122,10 +139,7 @@ router.put("/:id", requireAuth, requireAdmin, async (req, res) => {
     const patch = {};
 
     if ("name" in req.body) {
-      if (
-        typeof req.body.name !== "string" ||
-        req.body.name.trim().length < 2
-      ) {
+      if (typeof req.body.name !== "string" || req.body.name.trim().length < 2) {
         return res.status(400).json({ message: "Invalid name" });
       }
       const nm = req.body.name.trim();
