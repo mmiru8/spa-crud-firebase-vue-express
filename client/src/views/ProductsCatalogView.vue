@@ -1,5 +1,5 @@
 <template>
-  <div class="page">
+  <div class="page" ref="pageEl">
     <header class="header">
       <div>
         <h1>Catalog produse</h1>
@@ -12,12 +12,7 @@
     </header>
 
     <section class="controls">
-      <input
-        v-model.trim="query"
-        class="input"
-        type="text"
-        placeholder="Caută după nume..."
-      />
+      <input v-model.trim="query" class="input" type="text" placeholder="Caută după nume..." />
 
       <select v-model="sortKey" class="select">
         <option value="newest">Cele mai noi</option>
@@ -43,34 +38,24 @@
           <div class="price">{{ formatPrice(p.price) }}</div>
         </div>
 
-        <p class="desc">
-          {{ p.description || "Fără descriere" }}
-        </p>
+        <p class="desc">{{ p.description || "Fără descriere" }}</p>
 
         <div class="meta" v-if="p.category?.name">
           <span class="badge">{{ p.category.name }}</span>
         </div>
 
         <div class="actions">
-          <BaseButton variant="primary" @click="addToCart(p)">
-            Adaugă în coș
-          </BaseButton>
+          <BaseButton variant="primary" @click="addToCart(p)">Adaugă în coș</BaseButton>
         </div>
       </article>
     </section>
 
-    <!-- Load more / Infinite scroll sentinel -->
     <div class="loadMoreWrap" v-if="!loading && !allDone && filteredSorted.length > 0">
       <button class="btn" @click="loadMore" :disabled="loadingMore">
         {{ loadingMore ? "Se încarcă..." : "Încarcă mai multe" }}
       </button>
-      <div class="hint">
-        Infinite scroll este activ doar pe „Cele mai noi” fără căutare.
-      </div>
+      <div class="hint">Infinite scroll este activ doar pe „Cele mai noi” fără căutare.</div>
     </div>
-
-    <!-- sentinel: doar când are voie infinite scroll -->
-    <div ref="sentinel" class="sentinel" v-if="canInfiniteScroll"></div>
 
     <Toast :model-value="toast" />
   </div>
@@ -82,14 +67,13 @@ import Toast from "../components/Toast.vue";
 import { computed, onMounted, onBeforeUnmount, ref, watch } from "vue";
 import { useCartStore } from "../stores/cartStore";
 
-// IMPORTANT: endpoint-ul tău întoarce { items, nextCursor }
 const API_BASE = import.meta.env.VITE_API_BASE;
 
 const cart = useCartStore();
 
-const products = ref([]);        // tot ce am încărcat până acum
-const cursor = ref(null);        // nextCursor din backend
-const allDone = ref(false);      // nu mai avem pagini
+const products = ref([]);
+const cursor = ref(null);
+const allDone = ref(false);
 
 const loading = ref(false);
 const loadingMore = ref(false);
@@ -98,11 +82,11 @@ const error = ref("");
 const query = ref("");
 const sortKey = ref("newest");
 
-const sentinel = ref(null);
-let io = null;
+const PAGE_SIZE = 20;
 
-const MAX_ITEMS = 60;            // ca să nu mai ai „prea multe produse”
-const PAGE_SIZE = 12;
+const pageEl = ref(null);
+let scroller = null;
+let rafId = 0;
 
 const toNumber = (v) => {
   const n = Number(v);
@@ -114,10 +98,44 @@ const formatPrice = (v) => {
   return `${n.toFixed(2)} RON`;
 };
 
-// infinite scroll doar pe default (newest) și fără căutare
 const canInfiniteScroll = computed(() => {
   return sortKey.value === "newest" && query.value.trim() === "" && !allDone.value;
 });
+
+function findScroller(startEl) {
+  let el = startEl;
+  while (el && el !== document.body) {
+    const style = window.getComputedStyle(el);
+    const overflowY = style.overflowY;
+    const canScroll = (overflowY === "auto" || overflowY === "scroll") && el.scrollHeight > el.clientHeight;
+    if (canScroll) return el;
+    el = el.parentElement;
+  }
+  return window;
+}
+
+function bottomGap(target) {
+  if (target === window) {
+    const doc = document.documentElement;
+    const scrollTop = window.pageYOffset || doc.scrollTop || 0;
+    return doc.scrollHeight - (scrollTop + window.innerHeight);
+  }
+  return target.scrollHeight - (target.scrollTop + target.clientHeight);
+}
+
+function onScrollEvent() {
+  if (rafId) return;
+  rafId = requestAnimationFrame(async () => {
+    rafId = 0;
+    await onScroll();
+  });
+}
+
+async function onScroll() {
+  if (!canInfiniteScroll.value) return;
+  if (loading.value || loadingMore.value || allDone.value) return;
+  if (bottomGap(scroller) < 800) await loadMore();
+}
 
 async function fetchPage({ reset = false } = {}) {
   if (reset) {
@@ -126,16 +144,11 @@ async function fetchPage({ reset = false } = {}) {
     allDone.value = false;
   }
 
-  // limit hard ca să nu mai ai 200 produse în UI
-  if (products.value.length >= MAX_ITEMS) {
-    allDone.value = true;
-    return;
-  }
+  if (allDone.value) return;
 
-  const limit = Math.min(PAGE_SIZE, MAX_ITEMS - products.value.length);
   const qs = new URLSearchParams();
-  qs.set("limit", String(limit));
-  if (cursor.value) qs.set("cursor", cursor.value);
+  qs.set("limit", String(PAGE_SIZE));
+  if (cursor.value !== null && cursor.value !== undefined) qs.set("cursor", String(cursor.value));
 
   const res = await fetch(`${API_BASE}/api/products?${qs.toString()}`);
   if (!res.ok) {
@@ -143,16 +156,23 @@ async function fetchPage({ reset = false } = {}) {
     throw new Error(data?.message || "Eroare API produse");
   }
 
-  const data = await res.json(); // { items, nextCursor }
+  const data = await res.json();
   const incoming = Array.isArray(data.items) ? data.items : [];
 
-  // concat + dedup
   const map = new Map(products.value.map((p) => [p.id, p]));
   for (const p of incoming) map.set(p.id, p);
   products.value = Array.from(map.values());
 
-  cursor.value = data.nextCursor || null;
-  if (!cursor.value || incoming.length === 0) allDone.value = true;
+  const hasNextCursor = Object.prototype.hasOwnProperty.call(data, "nextCursor");
+
+  if (!hasNextCursor || data.nextCursor === null || data.nextCursor === undefined) {
+    allDone.value = true;
+    cursor.value = null;
+    return;
+  }
+
+  cursor.value = data.nextCursor;
+  if (incoming.length === 0) allDone.value = true;
 }
 
 async function refresh() {
@@ -169,7 +189,7 @@ async function refresh() {
 }
 
 async function loadMore() {
-  if (allDone.value) return;
+  if (allDone.value || loadingMore.value || loading.value) return;
   loadingMore.value = true;
   error.value = "";
   try {
@@ -179,30 +199,27 @@ async function loadMore() {
     error.value = "Nu am putut încărca încă o pagină.";
   } finally {
     loadingMore.value = false;
+    await onScroll();
   }
 }
 
 const filteredSorted = computed(() => {
   const q = query.value.toLowerCase().trim();
 
-  // filtrare
-  let arr = products.value
-    .filter((p) => (p.name || "").toLowerCase().includes(q))
-    .slice();
+  let arr = products.value.filter((p) => (p.name || "").toLowerCase().includes(q)).slice();
 
-  // sortare
   if (sortKey.value === "newest") {
-    // newest = createdAt desc (string ISO) + fallback id
-    arr.sort((a, b) =>
-      String(b.createdAt || "").localeCompare(String(a.createdAt || "")) ||
-      String(b.id || "").localeCompare(String(a.id || ""))
+    arr.sort(
+      (a, b) =>
+        String(b.createdAt || "").localeCompare(String(a.createdAt || "")) ||
+        String(b.id || "").localeCompare(String(a.id || ""))
     );
     return arr;
   }
 
   const parts = sortKey.value.split("-");
-  const dir = parts[parts.length - 1]; // asc / desc
-  const key = parts.slice(0, -1).join("-"); // name / price / cat-price-name
+  const dir = parts[parts.length - 1];
+  const key = parts.slice(0, -1).join("-");
   const sign = dir === "asc" ? 1 : -1;
 
   arr.sort((a, b) => {
@@ -229,17 +246,16 @@ const filteredSorted = computed(() => {
   return arr;
 });
 
-// dacă user schimbă căutare/sort, nu mai vrem să tot încarce automat -> rămânem pe ce e încărcat.
-// dacă vrei să fie „curat”, poți să dai refresh automat:
-watch([query, sortKey], async ([q, sk], [oldQ, oldSk]) => {
-  // dacă revine pe newest + query gol => reactivăm infinite și reîncarcăm de la zero
+watch([query, sortKey], async ([q, sk]) => {
   if (sk === "newest" && q.trim() === "") {
     await refresh();
+    await onScroll();
   }
 });
 
 const toast = ref("");
 let toastTimer = null;
+
 const showToast = (msg) => {
   toast.value = msg;
   if (toastTimer) clearTimeout(toastTimer);
@@ -254,32 +270,33 @@ const addToCart = (p) => {
   showToast(`"${p.name}" a fost adăugat în coș`);
 };
 
-function setupIO() {
-  if (io) io.disconnect();
-  if (!sentinel.value) return;
-
-  io = new IntersectionObserver(async (entries) => {
-    const ent = entries[0];
-    if (ent.isIntersecting && canInfiniteScroll.value && !loadingMore.value) {
-      await loadMore();
-    }
-  });
-
-  io.observe(sentinel.value);
-}
-
-watch(canInfiniteScroll, () => {
-  // reconfigurează observer când se activează/dezactivează
-  setTimeout(setupIO, 0);
-});
-
 onMounted(async () => {
   await refresh();
-  setupIO();
+
+  scroller = findScroller(pageEl.value);
+  const opts = { passive: true };
+
+  if (scroller === window) {
+    window.addEventListener("scroll", onScrollEvent, opts);
+  } else {
+    scroller.addEventListener("scroll", onScrollEvent, opts);
+  }
+
+  await onScroll();
 });
 
 onBeforeUnmount(() => {
-  if (io) io.disconnect();
+  if (!scroller) return;
+
+  if (scroller === window) {
+    window.removeEventListener("scroll", onScrollEvent);
+  } else {
+    scroller.removeEventListener("scroll", onScrollEvent);
+  }
+
+  if (rafId) cancelAnimationFrame(rafId);
+  rafId = 0;
+  scroller = null;
 });
 </script>
 
@@ -296,8 +313,15 @@ onBeforeUnmount(() => {
   align-items: flex-start;
   gap: 12px;
 }
-h1 { margin: 0; font-size: 28px; }
-.sub { margin: 6px 0 0; color: #555; font-size: 13px; }
+h1 {
+  margin: 0;
+  font-size: 28px;
+}
+.sub {
+  margin: 6px 0 0;
+  color: #555;
+  font-size: 13px;
+}
 
 .controls {
   margin-top: 16px;
@@ -305,14 +329,20 @@ h1 { margin: 0; font-size: 28px; }
   gap: 10px;
   flex-wrap: wrap;
 }
-.input, .select {
+.input,
+.select {
   padding: 10px 12px;
   border: 1px solid #ddd;
   border-radius: 10px;
   outline: none;
 }
-.input { flex: 1; min-width: 220px; }
-.select { min-width: 220px; }
+.input {
+  flex: 1;
+  min-width: 220px;
+}
+.select {
+  min-width: 220px;
+}
 
 .btn {
   padding: 10px 12px;
@@ -322,7 +352,10 @@ h1 { margin: 0; font-size: 28px; }
   border-radius: 10px;
   cursor: pointer;
 }
-.btn:disabled { opacity: .6; cursor: not-allowed; }
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 
 .error {
   margin-top: 12px;
@@ -357,15 +390,23 @@ h1 { margin: 0; font-size: 28px; }
   justify-content: space-between;
   gap: 8px;
 }
-.title { margin: 0; font-size: 16px; }
-.price { font-weight: 700; white-space: nowrap; }
+.title {
+  margin: 0;
+  font-size: 16px;
+}
+.price {
+  font-weight: 700;
+  white-space: nowrap;
+}
 .desc {
   margin: 10px 0 0;
   color: #555;
   font-size: 13px;
   min-height: 34px;
 }
-.meta { margin-top: 10px; }
+.meta {
+  margin-top: 10px;
+}
 .badge {
   display: inline-block;
   font-size: 12px;
@@ -374,7 +415,9 @@ h1 { margin: 0; font-size: 28px; }
   border-radius: 999px;
   border: 1px solid #e6e6e6;
 }
-.actions { margin-top: 12px; }
+.actions {
+  margin-top: 12px;
+}
 
 .loadMoreWrap {
   margin: 18px 0 10px;
@@ -382,10 +425,19 @@ h1 { margin: 0; font-size: 28px; }
   align-items: center;
   gap: 12px;
 }
-.hint { font-size: 12px; color: #666; }
+.hint {
+  font-size: 12px;
+  color: #666;
+}
 
-.sentinel { height: 1px; }
-
-@media (max-width: 900px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 560px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
 </style>

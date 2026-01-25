@@ -7,11 +7,13 @@ import OrdersView from "../views/OrdersView.vue";
 import LoginView from "../views/LoginView.vue";
 import RegisterView from "../views/RegisterView.vue";
 import CartView from "../views/CartView.vue";
+import NewsView from "../views/NewsView.vue";
 
 import { useAuthStore } from "../stores/authStore";
 
 const routes = [
   { path: "/", component: HomeView },
+
   // public
   { path: "/login", component: LoginView },
   { path: "/register", component: RegisterView },
@@ -20,6 +22,12 @@ const routes = [
   {
     path: "/produse",
     component: ProductsCatalogView,
+    meta: { requiresAuth: true },
+  },
+  {
+    path: "/noutati",
+    name: "noutati",
+    component: NewsView,
     meta: { requiresAuth: true },
   },
   {
@@ -39,11 +47,14 @@ const routes = [
     component: ProductsAdminView,
     meta: { requiresAdmin: true },
   },
-    { path: "/:pathMatch(.*)*", component: NotFoundView },
+
+  { path: "/:pathMatch(.*)*", component: NotFoundView },
 ];
+
 const router = createRouter({
   history: createWebHistory(),
   routes,
+
 });
 
 router.beforeEach(async (to) => {

@@ -5,6 +5,7 @@
         <RouterLink to="/" class="link">Home</RouterLink>
         <RouterLink to="/produse" class="link">Produse</RouterLink>
         <RouterLink to="/comenzi" class="link">Comenzi</RouterLink>
+        <RouterLink to="/noutati" class="link">Noutăți</RouterLink>
 
         <RouterLink v-if="isAdmin" to="/admin/produse" class="link admin">
           Admin
@@ -52,10 +53,24 @@ const handleLogout = async () => {
 };
 </script>
 
-<style scoped>
+<style>
+.nav .link.router-link-active,
+.nav .link.router-link-exact-active {
+  background: #111;
+  color: #bd26ab;
+}
+
+
+.nav .link.router-link-active,
+.nav .link.router-link-exact-active {
+  font-weight: 700;
+  background: rgba(15, 23, 42, 0.06);
+  border-radius: 8px;
+  padding: 4px 8px;
+}
 .app {
   min-height: 100vh;
-  background: #fafafa;
+  background: #ffffff;
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
 }
 
@@ -111,7 +126,7 @@ const handleLogout = async () => {
   padding: 0 7px;
   border-radius: 999px;
   background: #111;
-  color: #fff;
+  color: #000000;
   display: inline-flex;
   align-items: center;
   justify-content: center;
