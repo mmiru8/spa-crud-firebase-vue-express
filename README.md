@@ -73,28 +73,6 @@ Modelarea datelor respectă principiile NoSQL și evită relațiile de tip SQL.
 
 ---
 
-## Structura proiectului (monorepo)
-
-spa-crud-firebase-vue-express/
-├── client/
-│   ├── src/
-│   │   ├── components/
-│   │   ├── views/
-│   │   ├── stores/
-│   │   ├── services/
-│   │   └── router/
-│   ├── public/
-│   └── vite.config.js
-├── server/
-│   ├── routes/
-│   ├── middleware/
-│   ├── scripts/
-│   ├── firebaseAdmin.js
-│   └── index.js
-└── README.md
-
----
-
 ## Rulare locală
 
 ### Backend (Express)
