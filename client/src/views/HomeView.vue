@@ -105,7 +105,7 @@
       <div class="sectionHead row">
         <div>
           <h2>Produse recomandate</h2>
-          <p class="muted">Live din Firestore prin API (Express).</p>
+          <!--<p class="muted">Live din Firestore prin API (Express).</p>-->
         </div>
 
         <div class="controls">

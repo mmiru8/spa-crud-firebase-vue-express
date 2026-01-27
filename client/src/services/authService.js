@@ -1,4 +1,3 @@
-// src/services/authService.js
 import { auth } from "../firebase/firebase";
 
 import {
@@ -7,7 +6,6 @@ import {
   signOut,
 } from "firebase/auth";
 
-// ✅ aici pui email-urile care sunt admin
 const ADMIN_EMAILS = ["admin@test.com", "mmiru3511@gmail.com"];
 
 export const login = (email, password) =>

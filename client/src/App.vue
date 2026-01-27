@@ -125,7 +125,7 @@ const handleLogout = async () => {
   height: 22px;
   padding: 0 7px;
   border-radius: 999px;
-  background: #111;
+  background: #efefef;
   color: #000000;
   display: inline-flex;
   align-items: center;
