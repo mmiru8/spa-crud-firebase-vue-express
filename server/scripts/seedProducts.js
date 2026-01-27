@@ -1,4 +1,3 @@
-// server/scripts/seedProducts.js
 const { faker } = require("@faker-js/faker");
 const { db } = require("../firebaseAdmin");
 

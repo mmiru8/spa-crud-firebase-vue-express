@@ -1,4 +1,3 @@
-// server/scripts/fixSlugs.js
 const { db } = require("../firebaseAdmin");
 
 const slugify = (s = "") =>
@@ -53,7 +52,7 @@ async function fixSlugs() {
 
     const needsCreatedBy = !data.createdBy;
 
-  
+
     if (!shouldSetSlug && !needsMetadata && !needsCreatedBy) {
       skipped++;
       continue;
@@ -65,7 +64,7 @@ async function fixSlugs() {
 
     if (needsCreatedBy) patch.createdBy = "fix-script";
 
-    
+
     const createdAt = data.createdAt || data.metadata?.createdAt || now;
     const createdBy = data.createdBy || data.metadata?.createdBy || "fix-script";
 
