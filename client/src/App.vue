@@ -6,10 +6,10 @@
         <RouterLink to="/produse" class="link">Produse</RouterLink>
         <RouterLink to="/comenzi" class="link">Comenzi</RouterLink>
         <RouterLink to="/noutati" class="link">Noutăți</RouterLink>
-
-        <RouterLink v-if="isAdmin" to="/admin/produse" class="link admin">
-          Admin
-        </RouterLink>
+        <RouterLink v-if="isAdmin" to="/admin/produse" class="link admin">Admin</RouterLink>
+<button v-if="isAdmin" type="button" class="link" @click="calculeazaSiNavigheaza">
+  Calculeaza
+</button>
 
         <div class="spacer"></div>
 
@@ -34,10 +34,19 @@
 </template>
 
 <script setup>
+
+
 import { computed } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "./stores/authStore";
 import { useCartStore } from "./stores/cartStore";
+import { onMounted, onBeforeUnmount, ref } from "vue";
+const calculeazaSiNavigheaza = async () => {
+  if (router.currentRoute.value.path !== "/admin/produse") {
+    await router.push("/admin/produse");
+  }
+  window.dispatchEvent(new Event("calc-media-admin"));
+};
 
 const router = useRouter();
 const auth = useAuthStore();
@@ -51,6 +60,19 @@ const handleLogout = async () => {
   await auth.logout?.();
   router.push("/login");
 };
+
+function onCalcEvent() {
+  calculeazaMedia();
+}
+
+onMounted(() => {
+  window.addEventListener("calc-media-admin", onCalcEvent);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("calc-media-admin", onCalcEvent);
+});
+
 </script>
 
 <style>
@@ -59,7 +81,6 @@ const handleLogout = async () => {
   background: #111;
   color: #bd26ab;
 }
-
 
 .nav .link.router-link-active,
 .nav .link.router-link-exact-active {
@@ -176,3 +197,4 @@ const handleLogout = async () => {
   padding: 20px 16px;
 }
 </style>
+

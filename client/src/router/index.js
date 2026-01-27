@@ -1,3 +1,4 @@
+
 import { createRouter, createWebHistory } from "vue-router";
 import NotFoundView from "../views/NotFoundView.vue";
 import HomeView from "../views/HomeView.vue";
@@ -8,7 +9,6 @@ import LoginView from "../views/LoginView.vue";
 import RegisterView from "../views/RegisterView.vue";
 import CartView from "../views/CartView.vue";
 import NewsView from "../views/NewsView.vue";
-
 import { useAuthStore } from "../stores/authStore";
 
 const routes = [
@@ -45,7 +45,7 @@ const routes = [
   {
     path: "/admin/produse",
     component: ProductsAdminView,
-    meta: { requiresAdmin: true },
+    meta: { requiresAuth: true, requiresAdmin: true },
   },
 
   { path: "/:pathMatch(.*)*", component: NotFoundView },
@@ -54,34 +54,28 @@ const routes = [
 const router = createRouter({
   history: createWebHistory(),
   routes,
-
 });
 
 router.beforeEach(async (to) => {
   const auth = useAuthStore();
 
-  // așteaptă Firebase la refresh
   if (!auth.ready) {
     await auth.init();
   }
 
-  // admin
+
   if (to.meta.requiresAdmin) {
     if (auth.isLoggedIn && auth.isAdmin) return true;
     return { path: "/login" };
   }
 
-  // user autentificat
+
   if (to.meta.requiresAuth) {
     if (auth.isLoggedIn) return true;
     return { path: "/login" };
   }
 
-  // dacă e logat și merge pe login/register → redirect
-  if (
-    auth.isLoggedIn &&
-    (to.path === "/login" || to.path === "/register")
-  ) {
+  if (auth.isLoggedIn && (to.path === "/login" || to.path === "/register")) {
     return auth.isAdmin ? "/admin/produse" : "/produse";
   }
 

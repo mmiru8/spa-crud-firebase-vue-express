@@ -40,7 +40,17 @@
     <p v-if="error" class="error">{{ error }}</p>
 
     <section class="list">
-      <h2>Lista produse</h2>
+
+<h2>Lista produse</h2>
+
+<button type="button" class="btnOutline" @click="calculeazaMedia">
+  Calculează
+</button>
+
+<p v-if="mediaPreturilor !== null" class="avgBox">
+  Media aritmetică: <strong>{{ mediaPreturilor.toFixed(2) }} RON</strong>
+</p>
+
 
       <p v-if="!loading && products.length === 0" class="empty">Nu există produse.</p>
 
@@ -68,6 +78,8 @@
 >
   {{ deletingId === p.id ? "Se șterge..." : "Șterge" }}
 </button>
+
+
 
 </div>
 
@@ -101,11 +113,22 @@ const form = ref({
 
 const formatPrice = (v) => `${Number(v || 0).toFixed(2)} RON`;
 
+const mediaPreturilor = ref(null);
+const calculeazaMedia = () => {
+  if (products.value.length === 0) {
+    mediaPreturilor.value = null;
+    return;
+  }
+  const suma = products.value.reduce((acc, p) => acc + Number(p.price || 0), 0);
+  mediaPreturilor.value = suma / products.value.length;
+};
+
 const load = async () => {
   loading.value = true;
   error.value = "";
   try {
     products.value = await getProductsAdminAll();
+    calculeazaMedia();
   } catch (e) {
     error.value = "Nu am putut încărca produsele.";
     console.error(e);
@@ -143,21 +166,14 @@ const submit = async () => {
       description: form.value.description || "",
     };
 
-    if (editingId.value) {
-      await updateProduct(editingId.value, payload);
-    } else {
-      await addProduct(payload);
-    }
+    if (editingId.value) await updateProduct(editingId.value, payload);
+    else await addProduct(payload);
 
     reset();
     await load();
   } catch (e) {
     console.error(e);
-    alert(
-      editingId.value
-        ? "Nu am putut actualiza produsul."
-        : "Nu am putut adăuga produsul."
-    );
+    alert(editingId.value ? "Nu am putut actualiza produsul." : "Nu am putut adăuga produsul.");
   } finally {
     saving.value = false;
   }
@@ -180,7 +196,16 @@ onMounted(load);
 </script>
 
 
+
 <style scoped>
+.avgBox{
+  margin: 10px 0;
+  padding: 10px 12px;
+  border: 1px solid #eee;
+  border-radius: 12px;
+  background: #fafafa;
+}
+
 /* ========== Layout general ========== */
 .page {
   max-width: 980px;
